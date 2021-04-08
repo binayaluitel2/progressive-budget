@@ -1,21 +1,23 @@
-const FILES_TO_CACHE = [
-  "/",
-  "/index.html",
-  "/index.js",
-  "/styles.css",
-  "/manifest.webmanifest",
-  "icons/icon-169x192.png",
-  "icons/icon-452x512.png",
-];
-
 const CACHE_NAME = "static-cache-v2";
 const DATA_CACHE_NAME = "data-cache-v1";
+
+const iconSizes = ["192", "512"];
+const iconFiles = iconSizes.map((size) => `/icons/icon-${size}x${size}.png`);
+
+const staticFilesToPreCache = [
+  "/",
+  "/index.js",
+  "/db.js",
+  "/index.html",
+  "/manifest.webmanifest",
+  "/styles.css",
+].concat(iconFiles);
 
 self.addEventListener("install", function (evt) {
   evt.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       console.log("Your files were pre-cached successfully!");
-      return cache.addAll(FILES_TO_CACHE);
+      return cache.addAll(staticFilesToPreCache);
     })
   );
 
@@ -40,7 +42,8 @@ self.addEventListener("activate", function (evt) {
 });
 
 self.addEventListener("fetch", function (evt) {
-  if (evt.request.url.includes("/api/")) {
+  const { url } = evt.request;
+  if (url.includes("/api")) {
     evt.respondWith(
       caches
         .open(DATA_CACHE_NAME)
@@ -48,7 +51,7 @@ self.addEventListener("fetch", function (evt) {
           return fetch(evt.request)
             .then((response) => {
               if (response.status === 200) {
-                cache.put(evt.request.url, response.clone());
+                cache.put(evt.request, response.clone());
               }
 
               return response;
@@ -59,13 +62,13 @@ self.addEventListener("fetch", function (evt) {
         })
         .catch((err) => console.log(err))
     );
-
-    return;
+  } else {
+    evt.respondWith(
+      caches.open(CACHE_NAME).then((cache) => {
+        return cache.match(evt.request).then((response) => {
+          return response || fetch(evt.request);
+        });
+      })
+    );
   }
-
-  evt.respondWith(
-    caches.match(evt.request).then(function (response) {
-      return response || fetch(evt.request);
-    })
-  );
 });
